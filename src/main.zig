@@ -169,10 +169,9 @@ const Parser = struct {
         switch (self.source[self.index]) {
             .l_paren => {
                 self.index += 1;
-                const expression_rpn = try self.expression(alloc);
+                try result.appendSlice(alloc, try self.expression(alloc));
                 if (self.source[self.index] == .r_paren) {
                     self.index += 1;
-                    try result.appendSlice(alloc, expression_rpn);
                 } else {
                     return error.UnexpectedToken;
                 }
