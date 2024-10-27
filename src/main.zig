@@ -109,7 +109,7 @@ const Parser = struct {
         return try result.toOwnedSlice(alloc);
     }
 
-    // <term> ::= <factor> ((("*" | "/") <factor>)* | <number>*)
+    // <term> ::= <factor> ((("*" | "/") <factor>)* | <factor>*)
     fn term(self: *Parser, alloc: Allocator) ![]const RpnToken {
         var result: List(RpnToken) = .empty;
         try result.appendSlice(alloc, try self.factor(alloc));
@@ -128,8 +128,8 @@ const Parser = struct {
             },
             .num, .l_paren => {
                 // Implied multiplication
-                const number_rpn = try self.number(alloc);
-                try result.appendSlice(alloc, number_rpn);
+                const factor_rpn = try self.factor(alloc);
+                try result.appendSlice(alloc, factor_rpn);
                 try result.append(alloc, .mul);
                 continue :scan self.source[self.index];
             },
@@ -212,10 +212,10 @@ fn formatRpn(writer: anytype, tokens: []const RpnToken) !void {
         }
         const token = tokens[token_idx];
         switch (token) {
-            .add, .sub, .mul, .div, .pow, .neg => {
+            .add, .sub, .mul, .div, .pow => {
                 const char: u8 = switch (token) {
                     .add => '+',
-                    .sub, .neg => '-',
+                    .sub => '-',
                     .mul => '*',
                     .div => '/',
                     .pow => '^',
@@ -223,9 +223,8 @@ fn formatRpn(writer: anytype, tokens: []const RpnToken) !void {
                 };
                 try writer.writeByte(char);
             },
-            .num => |digits| {
-                try writer.writeAll(digits);
-            },
+            .neg => try writer.writeAll("neg"),
+            .num => |digits| try writer.writeAll(digits),
         }
     }
 }
@@ -234,7 +233,7 @@ pub fn main() !void {
     const alloc = std.heap.page_allocator;
     const stdout = std.io.getStdOut().writer();
 
-    const source = "2\n+\t3*2(---4-1) ^5.7^0.89/6";
+    const source = "0*2\n+\t3*2(-7+--4-1) ^5^8/6--9";
     const parsed = try parse(alloc, source);
     try formatRpn(stdout, parsed);
     try stdout.writeByte('\n');
