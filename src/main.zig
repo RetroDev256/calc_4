@@ -72,6 +72,10 @@ const RpnToken = union(enum) {
     num: []const u8,
 };
 
+/// Expressions are matched based on the correct order of computation:
+/// ( and ), before ^, before * and /, before + and -
+/// negation is flattened if it appears more than once
+/// The output of each function is a slice of postfix tokens
 const Parser = struct {
     index: usize,
     source: [*]const Token,
@@ -228,12 +232,45 @@ fn formatRpn(writer: anytype, tokens: []const RpnToken) !void {
     }
 }
 
+fn eval(comptime T: type, alloc: Allocator, tokens: []const RpnToken) !T {
+    var stack: List(T) = .empty;
+
+    for (tokens) |token| {
+        switch (token) {
+            .num => |digits| try stack.append(alloc, try std.fmt.parseFloat(T, digits)),
+            .neg => stack.appendAssumeCapacity(-stack.pop()),
+            .add, .sub, .mul, .div, .pow => {
+                const rhs, const lhs = .{ stack.pop(), stack.pop() }; // FILO
+                stack.appendAssumeCapacity(switch (token) {
+                    .add => lhs + rhs,
+                    .sub => lhs - rhs,
+                    .mul => lhs * rhs,
+                    .div => lhs / rhs,
+                    .pow => std.math.pow(T, lhs, rhs),
+                    else => unreachable,
+                });
+            },
+        }
+    }
+
+    assert(stack.items.len == 1);
+    return stack.getLast();
+}
+
 pub fn main() !void {
     const alloc = std.heap.page_allocator;
     const stdout = std.io.getStdOut().writer();
 
-    const source = "0*2\n+\t3*2(-7+--4-1) ^5^8/6--9";
+    const source = "5+1.7^12-4*-3/-14.2";
     const parsed = try parse(alloc, source);
+    defer alloc.free(parsed);
+    const result = try eval(f64, alloc, parsed);
+
+    try stdout.print("Input: {s}\n", .{source});
+
+    try stdout.writeAll("RPN: ");
     try formatRpn(stdout, parsed);
     try stdout.writeByte('\n');
+
+    try stdout.print("Output: {d}\n", .{result});
 }
