@@ -94,6 +94,7 @@ const Parser = struct {
     // <expression> ::= <term> (("+" | "-") <term>)*
     fn expression(self: *Parser, alloc: Allocator) ParseError![]const RpnToken {
         var result: List(RpnToken) = .empty;
+        defer result.deinit(alloc);
         try result.appendSlice(alloc, try self.term(alloc));
         scan: switch (self.source[self.index]) {
             .add => {
@@ -116,6 +117,7 @@ const Parser = struct {
     // <term> ::= <factor> ((("*" | "/") <factor>)* | <factor>*)
     fn term(self: *Parser, alloc: Allocator) ![]const RpnToken {
         var result: List(RpnToken) = .empty;
+        defer result.deinit(alloc);
         try result.appendSlice(alloc, try self.factor(alloc));
         scan: switch (self.source[self.index]) {
             .mul => {
@@ -145,6 +147,7 @@ const Parser = struct {
     // <factor> ::= <negation> ('^' <factor>)*
     fn factor(self: *Parser, alloc: Allocator) ![]const RpnToken {
         var result: List(RpnToken) = .empty;
+        defer result.deinit(alloc);
         try result.appendSlice(alloc, try self.negation(alloc));
         if (self.source[self.index] == .pow) {
             self.index += 1;
@@ -157,6 +160,7 @@ const Parser = struct {
     // <negation> ::= ("-")* <number>
     fn negation(self: *Parser, alloc: Allocator) ![]const RpnToken {
         var result: List(RpnToken) = .empty;
+        defer result.deinit(alloc);
         var neg_count: usize = 0;
         while (self.source[self.index] == .sub) {
             self.index += 1;
@@ -170,6 +174,7 @@ const Parser = struct {
     // <number> ::= '(' <expression> ')' | <floating point number>
     fn number(self: *Parser, alloc: Allocator) ![]const RpnToken {
         var result: List(RpnToken) = .empty;
+        defer result.deinit(alloc);
         switch (self.source[self.index]) {
             .l_paren => {
                 self.index += 1;
@@ -193,6 +198,7 @@ const Parser = struct {
 fn tokenize(alloc: Allocator, source: [:0]const u8) ![]const Token {
     var toker: Tokenizer = .init(source);
     var tokens: List(Token) = .empty;
+    defer tokens.deinit(alloc);
     while (true) {
         const token = try toker.next();
         try tokens.append(alloc, token);
@@ -234,6 +240,7 @@ fn formatRpn(writer: anytype, tokens: []const RpnToken) !void {
 
 fn eval(comptime T: type, alloc: Allocator, tokens: []const RpnToken) !T {
     var stack: List(T) = .empty;
+    defer stack.deinit(alloc);
 
     for (tokens) |token| {
         switch (token) {
