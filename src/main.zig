@@ -157,14 +157,22 @@ const Parser = struct {
         return try result.toOwnedSlice(alloc);
     }
 
-    // <negation> ::= ("-")* <number>
+    // <negation> ::= ("-" | "+")* <number>
     fn negation(self: *Parser, alloc: Allocator) ![]const RpnToken {
         var result: List(RpnToken) = .empty;
         defer result.deinit(alloc);
         var neg_count: usize = 0;
-        while (self.source[self.index] == .sub) {
-            self.index += 1;
-            neg_count += 1;
+        scan: switch (self.source[self.index]) {
+            .sub => {
+                self.index += 1;
+                neg_count += 1;
+                continue :scan self.source[self.index];
+            },
+            .add => {
+                self.index += 1;
+                continue :scan self.source[self.index];
+            },
+            else => {},
         }
         try result.appendSlice(alloc, try self.number(alloc));
         try result.appendNTimes(alloc, .neg, neg_count % 2);
@@ -268,7 +276,7 @@ pub fn main() !void {
     const alloc = std.heap.page_allocator;
     const stdout = std.io.getStdOut().writer();
 
-    const source = "5+1.7^12-4*-3/-14.2";
+    const source = "5+-+1.7^+12-+4*++--(+-+-+3)-+++-3/+-14.2";
     const parsed = try parse(alloc, source);
     defer alloc.free(parsed);
     const result = try eval(f64, alloc, parsed);
