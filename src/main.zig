@@ -24,13 +24,12 @@ const Tokenizer = struct {
     }
 
     fn next(self: *Tokenizer) !Token {
-        scan: switch (self.source[self.index]) {
+        while (true) switch (self.source[self.index]) {
             // terminate on end-of-string
             0 => return .eof,
             // ignore all whitespace
             ' ', '\t', '\r', '\n' => {
                 self.index += 1;
-                continue :scan self.source[self.index];
             },
             // single-character tokens
             '+', '-', '*', '/', '^', '(', ')' => {
@@ -58,7 +57,7 @@ const Tokenizer = struct {
             },
             // All valid input has been handled
             else => return error.InvalidToken,
-        }
+        };
     }
 };
 
@@ -96,21 +95,19 @@ const Parser = struct {
         var result: List(RpnToken) = .empty;
         defer result.deinit(alloc);
         try result.appendSlice(alloc, try self.term(alloc));
-        scan: switch (self.source[self.index]) {
+        scan: while (true) switch (self.source[self.index]) {
             .add => {
                 self.index += 1;
                 try result.appendSlice(alloc, try self.term(alloc));
                 try result.append(alloc, .add);
-                continue :scan self.source[self.index];
             },
             .sub => {
                 self.index += 1;
                 try result.appendSlice(alloc, try self.term(alloc));
                 try result.append(alloc, .sub);
-                continue :scan self.source[self.index];
             },
-            else => {},
-        }
+            else => break :scan,
+        };
         return try result.toOwnedSlice(alloc);
     }
 
@@ -119,28 +116,25 @@ const Parser = struct {
         var result: List(RpnToken) = .empty;
         defer result.deinit(alloc);
         try result.appendSlice(alloc, try self.factor(alloc));
-        scan: switch (self.source[self.index]) {
+        scan: while (true) switch (self.source[self.index]) {
             .mul => {
                 self.index += 1;
                 try result.appendSlice(alloc, try self.factor(alloc));
                 try result.append(alloc, .mul);
-                continue :scan self.source[self.index];
             },
             .div => {
                 self.index += 1;
                 try result.appendSlice(alloc, try self.factor(alloc));
                 try result.append(alloc, .div);
-                continue :scan self.source[self.index];
             },
             .num, .l_paren => {
                 // Implied multiplication
                 const factor_rpn = try self.factor(alloc);
                 try result.appendSlice(alloc, factor_rpn);
                 try result.append(alloc, .mul);
-                continue :scan self.source[self.index];
             },
-            else => {},
-        }
+            else => break :scan,
+        };
         return try result.toOwnedSlice(alloc);
     }
 
@@ -162,18 +156,16 @@ const Parser = struct {
         var result: List(RpnToken) = .empty;
         defer result.deinit(alloc);
         var neg_count: usize = 0;
-        scan: switch (self.source[self.index]) {
+        scan: while (true) switch (self.source[self.index]) {
             .sub => {
                 self.index += 1;
                 neg_count += 1;
-                continue :scan self.source[self.index];
             },
             .add => {
                 self.index += 1;
-                continue :scan self.source[self.index];
             },
-            else => {},
-        }
+            else => break :scan,
+        };
         try result.appendSlice(alloc, try self.number(alloc));
         try result.appendNTimes(alloc, .neg, neg_count % 2);
         return try result.toOwnedSlice(alloc);
